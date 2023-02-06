@@ -255,12 +255,17 @@ int main(int argc, char* argv[]) {
                 users[connection_fd].init(connection_fd, client_address);
 
             } else if (events[i].events & (EPOLLRDHUP | EPOLLERR | EPOLLHUP)) {
-                //  对方异常断开或错误等事件
+                // 对方异常断开或错误等事件, 关闭连接
+                // 将该连接对应的fd从epoll instance中移除
+                // 关闭该文件描述符
+                // 将该http_connection实例中的m_sockfd置为-1
                 users[sockfd].close_connection();
+                // 
             } else if (events[i].events & EPOLLIN) {
                 if (users[sockfd].read()) { // 一次性读完数据
                     pool->append(users + sockfd);
                 } else {
+                    // 
                     users[sockfd].close_connection();
                 }
             } else if (events[i].events & EPOLLOUT) {

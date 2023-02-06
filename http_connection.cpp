@@ -10,6 +10,8 @@ int16_t setnonblocking(int fd) {
     return old_flag;
 }
 
+// 将fd指定的连接的读事件注册到epoll_fd指定的epoll instance
+// 并将fd设置为非阻塞
 void addfd(int epoll_fd, int fd, bool one_shot) {
     epoll_event event;
     event.data.fd = fd;
@@ -27,6 +29,7 @@ void removefd(int epoll_fd, int fd) {
 
 }
 
+// 更新fd oneshot
 void modifyfd(int epoll_fd, int fd, int e) {
     epoll_event event;
     event.data.fd = fd;
@@ -34,6 +37,9 @@ void modifyfd(int epoll_fd, int fd, int e) {
     epoll_ctl(epoll_fd, EPOLL_CTL_MOD, fd, &event);
 }
 
+// sockfd: 新建立的连接的sockfd
+// addr: 客户端socket 信息, accept()时传入一个struct sockaddr* addr, 
+//       由accept()将客户端socket信息保存到addr
 void http_connection::init(int sockfd, const sockaddr_in& addr) {
     m_sockfd = sockfd;
     m_address = addr;
@@ -41,7 +47,7 @@ void http_connection::init(int sockfd, const sockaddr_in& addr) {
     // 端口复用
     int reuse = 1;
     setsockopt(m_sockfd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
-
+    // 将新连接读事件注册到epoll instance
     addfd(m_epoll_fd, sockfd, true);
     m_user_count++;
     // init();
