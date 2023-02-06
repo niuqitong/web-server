@@ -20,7 +20,7 @@ private:
     int m_thread_number; // # of threads in the pool
     pthread_t* m_threads; // container of the threads
 
-    // request queue
+    // request queue, linked list
     int m_max_requests;
     std::list<T*> m_work_queue;
 
@@ -73,7 +73,7 @@ bool thread_pool<T>::append(T* request) {
         m_queue_locker.unlock();
         return false;
     }
-    m_work_queue.push_back(request);
+    m_work_queue.push_back(request); // std::list<http_connection*> m_work_queue;
     m_queue_locker.unlock();
     m_queue_stat.post();
     return true; 
@@ -89,9 +89,9 @@ void* thread_pool<T>::worker(void* arg) {
 template<typename T>
 void thread_pool<T>::run() {
     while (!m_stop) {
-        m_queue_stat.wait();
-        m_queue_locker.lock();
-        if (m_work_queue.empty()) {
+        m_queue_stat.wait(); // sem m_queue_stat;
+        m_queue_locker.lock(); // pthread_mutex_t 
+        if (m_work_queue.empty()) { // std::list<T*> m_work_queue;
             m_queue_locker.unlock();
             continue;
         }
