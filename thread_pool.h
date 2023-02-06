@@ -36,7 +36,8 @@ private:
 
 template<typename T>
 thread_pool<T>::thread_pool(int thread_number, int max_requests) : 
-    m_thread_number(thread_number), m_max_requests(max_requests), m_stop(false), m_threads(NULL) {
+    m_thread_number(thread_number), m_max_requests(max_requests), 
+    m_stop(false), m_threads(NULL) {
     if (thread_number <= 0 || max_requests <= 0)
         throw std::exception();
     m_threads = new pthread_t[thread_number];
@@ -47,7 +48,7 @@ thread_pool<T>::thread_pool(int thread_number, int max_requests) :
     for (int i = 0; i < thread_number; i++) {
         printf("creating %d-th thread\n", i);
         
-        // in c++, worker has to be a static function静态函数??
+        // in c++, worker has to be a static function静态函数
         if (pthread_create(m_threads + i, NULL, worker, this) != 0) {
             delete [] m_threads;
             throw std::exception();

@@ -1,16 +1,19 @@
 #ifndef HTTP_CONNECTION_H
 #define HTTP_CONNECTION_H
-#include <sys/epoll.h>
-#include <stdlib.h>
 #include <unistd.h>
-#include <stdio.h>
 #include <signal.h>
 #include <sys/types.h>
+#include <sys/epoll.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <assert.h>
 #include <sys/stat.h>
+#include <string.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <sys/mman.h>
 #include <stdarg.h>
 #include <errno.h>
@@ -25,9 +28,9 @@ public:
     static int m_epoll_fd; 
 
     static int m_user_count;
-    http_connection();
+    http_connection(){}
 
-    ~http_connection();
+    ~http_connection(){}
     // initialize the newly-built connection
     void init(int sockfd, const sockaddr_in& addr);
     void process(); // handle requests from clients

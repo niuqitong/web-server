@@ -4,9 +4,10 @@ int http_connection::m_epoll_fd = -1;
 int http_connection::m_user_count = 0;
 
 // 设置文件描述符非阻塞
-void setnonblocking(int fd) {
+int16_t setnonblocking(int fd) {
     int old_flag = fcntl(fd, F_GETFL);
     fcntl(fd, F_SETFL, old_flag | O_NONBLOCK);
+    return old_flag;
 }
 
 void addfd(int epoll_fd, int fd, bool one_shot) {
@@ -43,6 +44,7 @@ void http_connection::init(int sockfd, const sockaddr_in& addr) {
 
     addfd(m_epoll_fd, sockfd, true);
     m_user_count++;
+    // init();
 }
 
 

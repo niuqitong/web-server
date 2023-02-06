@@ -20,10 +20,11 @@
 // add signal capture, 
 void addsig(int sig, void(handler)(int)) {
     struct sigaction sa;
-    memset(&sa, 0, sizeof(sa)); // or bzero()
+    memset(&sa, '\0', sizeof(sa)); // or bzero()
     sa.sa_handler = handler;
     sigfillset(&sa.sa_mask);
-    sigaction(sig, &sa, NULL);
+    assert( sigaction( sig, &sa, NULL ) != -1 );
+    // sigaction(sig, &sa, NULL);
 }
 
 // add/remove fd to/from epoll
@@ -69,10 +70,11 @@ int main(int argc, char* argv[]) {
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(port);
-    bind(listen_fd, (struct sockaddr*)&address, sizeof(address));
+    int ret = 0;
+    ret = bind(listen_fd, (struct sockaddr*)&address, sizeof(address));
 
     // listen
-    listen(listen_fd, 5);
+    ret = listen(listen_fd, 5);
 
     // IO multiplexing, epoll(), events array
     epoll_event events[MAX_EVENT_NUMBER];
@@ -96,7 +98,10 @@ int main(int argc, char* argv[]) {
                 struct sockaddr_in client_address;
                 socklen_t client_addrlen = sizeof(client_address);
                 int connection_fd = accept(listen_fd, (struct sockaddr*)&client_address, &client_addrlen);
-
+                if (connection_fd < 0) {
+                    printf("errno == %d\n", errno);
+                    continue;
+                }
                 if (http_connection::m_user_count >= MAX_FD) {
                     close(connection_fd);
                     continue;
