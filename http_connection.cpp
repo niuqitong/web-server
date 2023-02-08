@@ -16,6 +16,7 @@ void addfd(int epoll_fd, int fd, bool one_shot) {
     epoll_event event;
     event.data.fd = fd;
     event.events = EPOLLIN | EPOLLRDHUP; // EPOLLRDHUO 在底层处理对端异常断开
+    // event.events = EPOLLIN | EPOLLRDHUP; 
     if (one_shot) {
         event.events |= EPOLLONESHOT;
     }
@@ -64,6 +65,21 @@ void http_connection::close_connection() {
 
 bool http_connection::read() {
     printf("read\n");
+    if (m_read_index >= READ_BUFFER_SIZE)
+        return false;
+    int bytes_read = 0;
+    while (true) {
+        bytes_read = recv(m_sockfd, m_read_buf + m_read_index, READ_BUFFER_SIZE - m_read_index, 0);
+        if (bytes_read == -1) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) // no more data
+                break;
+            return false;
+        } else if (bytes_read == 0) {
+            return false;
+        }
+        m_read_index += bytes_read;
+    }
+    printf("data read: %s", m_read_buf);
     return true;
 }
 

@@ -26,8 +26,12 @@ public:
 
     // 所有socket上的事件都被注册到同一个epoll上
     static int m_epoll_fd; 
-
     static int m_user_count;
+
+    static const int  READ_BUFFER_SIZE = 2048;
+    static const int  WRITE_BUFFER_SIZE = 1024;
+    
+
     http_connection(){}
 
     ~http_connection(){}
@@ -41,7 +45,8 @@ public:
 private:
     int m_sockfd; // socket of this http connection
     sockaddr_in m_address; // socket address of the communication
-
+    char m_read_buf[READ_BUFFER_SIZE];
+    int m_read_index;
 
 };
 
