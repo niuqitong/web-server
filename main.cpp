@@ -170,7 +170,23 @@ int main(int argc, char* argv[]) {
         The event argument describes the object linked to the file  descriptor  fd.
      */
     http_connection::m_epoll_fd = epoll_fd;
+    /*
+        同步I/O模拟的proactor模式流程:
+        
+            主线程往epoll内核事件表注册socket上的读就绪事件。
 
+            主线程调用epoll_wait等待socket上有数据可读
+
+            当socket上有数据可读，epoll_wait通知主线程,主线程从socket循环读取数据，直到没有更多数据可读，
+            然后将读取到的数据封装成一个请求对象并插入请求队列。
+
+            睡眠在请求队列上某个工作线程被唤醒，它获得请求对象并处理客户请求，然后往epoll内核事件表中注册
+            该socket上的写就绪事件
+
+            主线程调用epoll_wait等待socket可写。
+
+            当socket上有数据可写，epoll_wait通知主线程。主线程往socket上写入服务器处理客户请求的结果。
+      */
     while (true) {
         int n = epoll_wait(epoll_fd, events, MAX_EVENT_NUMBER, -1);
         /* 

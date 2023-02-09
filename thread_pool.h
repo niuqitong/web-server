@@ -50,10 +50,75 @@ thread_pool<T>::thread_pool(int thread_number, int max_requests) :
         
         // in c++, worker has to be a static function静态函数
         if (pthread_create(m_threads + i, NULL, worker, this) != 0) {
+        /* 
+            int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+                          void *(*start_routine) (void *), void *arg);
+            在当前进程中创建并运行一个线程, 将线程ID保存到thread指向的位置
+            成功返回0, 失败返回error number
+            The  pthread_create() function starts a new thread in the calling
+            process.  The new thread starts execution by invoking  start_rou‐
+            tine(); arg is passed as the sole argument of start_routine().
+
+            // **** critical info from chatgpt ***
+            a thread created using pthread_create() does have a process control block (PCB), 
+            just like a process. The PCB is an internal data structure maintained by the 
+            operating system that contains information about a process or thread, such as its state, 
+            priority, stack pointer, and register values.
+
+            In the case of a thread created with pthread_create(), the operating system creates 
+            a separate PCB for each thread. Each thread has its own stack and set of register values, 
+            and the operating system uses the information stored in the thread's PCB to manage and 
+            schedule the execution of the thread.
+
+            The operating system uses the information stored in the PCB to manage the scheduling and 
+            execution of threads, just as it does for processes. When a thread is created, the 
+            operating system allocates memory for its stack and initializes the information in its 
+            PCB, such as the stack pointer and register values. The operating system then schedules 
+            the thread for execution and dispatches it to a processor when its turn arrives.
+
+            Each thread has its own separate PCB, so changes to the state or register values of one 
+            thread do not affect the other threads in the program. This allows threads to run 
+            concurrently and independently of each other, improving performance and scalability.
+        
+         */
             delete [] m_threads;
             throw std::exception();
         }
         if (pthread_detach(m_threads[i])) {
+        /* 
+            int pthread_detach(pthread_t thread);
+            将thread指定的线程标记为detached, 当它终止后, 所占用的资源自动归还给系统
+            The  pthread_detach()  function  marks  the  thread identified by
+            thread as detached.   When  a  detached  thread  terminates,  its
+            resources  are  automatically released back to the system without
+            the need for another thread to join with the terminated thread.
+
+            int pthread_join(pthread_t thread, void **retval);
+            The  pthread_join()  function  waits  for the thread specified by
+            thread to terminate.  If that thread has already terminated, then
+            pthread_join()  returns  immediately.
+
+            // from chatgpt, pthread_join()
+            In the C programming language, pthread_join is a function that is used to 
+            synchronize the execution of threads. It blocks the calling thread until 
+            the specified thread terminates.
+
+            The function pthread_join takes two arguments: the identifier of the thread 
+            to be joined, and a pointer to a location where the exit status of the joined 
+            thread can be stored. The exit status is a value that the thread returns when 
+            it terminates.
+
+            By using pthread_join, the calling thread can ensure that the specified thread 
+            has completed its execution before it continues. This is useful when multiple 
+            threads are executing concurrently and you need to wait for one thread to finish 
+            before proceeding with another.
+
+            In general, when a thread is created, it runs independently of the other threads 
+            in the program. The pthread_join function allows the calling thread to wait for 
+            the completion of the specified thread and obtain its exit status. This can be 
+            useful for ensuring that resources are freed in the correct order, or for ensuring 
+            that the results of one thread are available to another thread.
+         */
             delete[] m_threads;
             throw std::exception();  
         }

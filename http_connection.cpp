@@ -16,9 +16,28 @@ void addfd(int epoll_fd, int fd, bool one_shot) {
     epoll_event event;
     event.data.fd = fd;
     event.events = EPOLLIN | EPOLLRDHUP; // EPOLLRDHUO 在底层处理对端异常断开
+    /* 
+        EPOLLRDHUP (since Linux 2.6.17)
+
+            Stream  socket  peer closed connection, or shut down writing half of con‐
+            nection.  (This flag is especially useful  for  writing  simple  code  to
+            detect peer shutdown when using Edge Triggered monitoring.) 
+
+        EPOLLONESHOT (since Linux 2.6.2)
+
+              Sets the one-shot behavior for  the  associated  file  descriptor.   This
+              means that after an event is pulled out with epoll_wait(2) the associated
+              file descriptor is internally  disabled  and  no  other  events  will  be
+              reported  by  the  epoll  interface.  The user must call epoll_ctl() with
+              EPOLL_CTL_MOD to rearm the file descriptor with a new event mask.
+    */
     // event.events = EPOLLIN | EPOLLRDHUP; 
     if (one_shot) {
         event.events |= EPOLLONESHOT;
+        // 只监听一次事件，当监听完这次事件之后，如果还需要继续监听这个socket的话，
+        // 需要再次把这个socket加入到EPOLL队列里
+        // epoll则可以工作在ET高效模式，并且epoll还支持EPOLLONESHOT事件，该事件能进一步
+        // 减少可读、可写和异常事件被触发的次数。
     }
     epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &event);
     setnonblocking(fd);
@@ -70,6 +89,44 @@ bool http_connection::read() {
     int bytes_read = 0;
     while (true) {
         bytes_read = recv(m_sockfd, m_read_buf + m_read_index, READ_BUFFER_SIZE - m_read_index, 0);
+        /* 
+            ssize_t recv(int sockfd, void *buf, size_t len, int flags);
+
+            recv() 从 sockfd 接收信息, 可用于 TCP, UDP. 返回接收到的数据长度
+            如果sockfd上没有数据:
+                if sockfd被设为nonblocking:
+                    返回 -1, errno 设置为 EAGAIN 或 EWOULDBLOCK
+                else:
+                    recv()阻塞等待数据可用
+
+            sockfd一旦有数据可接收, recv()就会接收并返回收到的数据长度 最多可从sockfd 
+            读 len 大小的数据. 当连接对方关闭连接后, 返回0, 表示 end-of-file
+            The  recv(),  recvfrom(), and recvmsg() calls are used to receive
+            messages from a socket.  They may be used to receive data on both
+            connectionless  and connection-oriented sockets.
+
+            All  three  calls  return the length of the message on successful
+            completion.  If a message is too long to fit in the supplied buf‐
+            fer,  excess  bytes  may  be  discarded  depending on the type of
+            socket the message is received from. 
+            When  a stream socket peer has performed an orderly shutdown, the
+            return value will be 0 (the traditional "end-of-file" return).
+
+            If no messages are available at the  socket,  the  receive  calls
+            wait  for  a  message to arrive, unless the socket is nonblocking
+            (see fcntl(2)), in which case the value -1 is  returned  and  the
+            external  variable  errno  is  set to EAGAIN or EWOULDBLOCK.  The
+            receive calls normally return  any  data  available,  up  to  the
+            requested  amount,  rather  than  waiting for receipt of the full
+            amount requested.
+
+            The only difference between recv() and read(2) is the presence of
+            flags.  With a zero flags argument, recv() is  generally  equiva‐
+            lent to read(2)
+
+            ssize_t read(int fd, void *buf, size_t count);
+            read() 返回0时表示读到EOF
+         */
         if (bytes_read == -1) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) // no more data
                 break;
