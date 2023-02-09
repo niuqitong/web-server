@@ -337,14 +337,69 @@ http_connection::HTTP_CODE http_connection::do_request() {
 
     if (stat(m_real_file, &m_file_stat) < 0)
         return NO_RESOURCE;
-    if (!(m_file_stat.st_mode) & S_IROTH)
+    /* 
+        int stat(const char *pathname, struct stat *statbuf);
+        return information about a  file,  in  the  buffer pointed  to 
+        by statbuf.
+     */
+
+
+    if (!(m_file_stat.st_mode) & S_IROTH) // st_mode: file type and mode
         return FORBIDDEN_REQUEST;
     if (S_ISDIR(m_file_stat.st_mode))
         return BAD_REQUEST;
     
     int fd = open(m_real_file, O_RDONLY);
     // 创建内存映射
+    // st_size: total size of the file in bytes
     m_file_address = (char*)mmap(0, m_file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    /* 
+        void *mmap(void *addr, size_t length, int prot, int flags,
+                  int fd, off_t offset);
+        mmap()在当前进程的内存空间创建一个新的内存映射, 映射的起始虚拟地址为
+        addr(addr为0表示由内核选择映射的起始地址), 长度为length, 返回创建的
+        映射的起始地址. 文件映射的内容将初始化为fd offset 处开始的 length 个
+        字节. prot指定该映射的权限, PROT_READ表示可读. flags用来指定对该映射
+        内存的写操作如何影响其他进程和相应文件, MAP_PRIVATE表示创建一个写时拷
+        贝映射, 对该区域的写操作对其他进程不可见, 且不会更新到相应文件
+        
+        offset必须为页大小的整数倍
+        若addr不为0, 内核会在addr附近的page-aligned处创建映射
+
+        On error, the value MAP_FAILED (that is,  (void *) -1)  is  returned,
+        and errno is set to indicate the cause of the error.
+
+        mmap()  creates  a new mapping in the virtual address space of the
+        calling process.  The starting address  for  the  new  mapping  is
+        specified  in  addr.   The length argument specifies the length of
+        the mapping (which must be greater than 0).
+
+        prot
+                PROT_EXEC  Pages may be executed.
+
+                PROT_READ  Pages may be read.
+
+                PROT_WRITE Pages may be written.
+
+                PROT_NONE  Pages may not be accessed.
+
+        flags
+                MAP_SHARED
+                    Share this mapping.  Updates to the mapping are visible  to
+                    other  processes  mapping the same region, and (in the case
+                    of file-backed mappings) are carried through to the  under‐
+                    lying file.  (To precisely control when updates are carried
+                    through  to  the  underlying  file  requires  the  use   of
+                    msync(2).)
+
+                MAP_PRIVATE
+                    Create  a  private  copy-on-write  mapping.  Updates to the
+                    mapping are not visible to other processes mapping the same
+                    file,  and  are not carried through to the underlying file.
+                    It is unspecified whether changes made to  the  file  after
+                    the mmap() call are visible in the mapped region.
+        
+     */
     close(fd);
     return FILE_REQUEST;
 }
@@ -353,6 +408,24 @@ http_connection::HTTP_CODE http_connection::do_request() {
 void http_connection::unmap() {
     if (m_file_address) {
         munmap(m_file_address, m_file_stat.st_size);
+        /* 
+            The munmap() system call deletes the mappings  for  the  specified
+            address  range,  and causes further references to addresses within
+            the range to generate invalid memory references.   The  region  is
+            also  automatically  unmapped  when the process is terminated.  On
+            the other hand, closing the file descriptor  does  not  unmap  the
+            region.
+
+            The  address  addr must be a multiple of the page size (but length
+            need not be).  All pages containing a part of the indicated  range
+            are unmapped, and subsequent references to these pages will gener‐
+            ate SIGSEGV.  It is not an error if the indicated range  does  not
+            contain any mapped pages.
+
+            On  success,  munmap()  returns 0.  On failure, it returns -1, and
+            errno is set to indicate the cause of the error (probably to  EIN‐
+            VAL).
+         */
         m_file_address = 0;
     }
 }
@@ -373,8 +446,27 @@ bool http_connection::write() {
     while (1) {
         temp = writev(m_sockfd, m_iv, m_iv_count);
         /* 
+            将多个(2, in our case)buffer内的数据写到sockfd的缓冲区中
             ssize_t writev(int fd, const struct iovec *iov, int iovcnt);
-            
+
+            The  writev()  system call writes iovcnt buffers of data described
+            by iov to the file associated with the file descriptor fd ("gather
+            output"). The writev() system call works just like write(2) except 
+            that multiple buffers are written out.
+
+            writev() writes out the entire contents of iov[0] before proceeding 
+            to iov[1], and so on.
+
+            On success, return  the  number of bytes written.
+            On error, -1 is returned, and errno is set appropriately.
+
+            The pointer iov points to an array of iovec structures, defined in
+            <sys/uio.h> as:
+
+                struct iovec {
+                    void  *iov_base;    /* Starting address 
+                    size_t iov_len;     /* Number of bytes to transfer 
+                };
          */
         if (temp <= -1) {
             if (errno == EAGAIN) {
@@ -415,7 +507,35 @@ bool http_connection::add_response( const char* format, ... ) {
     }
     va_list arg_list;
     va_start( arg_list, format );
-    int len = vsnprintf( m_write_buf + m_write_idx, WRITE_BUFFER_SIZE - 1 - m_write_idx, format, arg_list );
+    int len = vsnprintf( m_write_buf + m_write_idx, 
+                    WRITE_BUFFER_SIZE - 1 - m_write_idx, format, arg_list );
+    /* 
+        int vsnprintf(char *str, size_t size, const char *format, va_list ap);
+
+        The  functions  vprintf(),  vfprintf(),  vdprintf(),   vsprintf(),
+        vsnprintf()  are  equivalent to the functions printf(), fprintf(),
+        dprintf(), sprintf(), snprintf(), respectively, except  that  they
+        are  called  with  a va_list instead of a variable number of argu‐
+        ments.  These functions do not call  the  va_end  macro.   Because
+        they  invoke  the va_arg macro, the value of ap is undefined after
+        the call.
+
+        All of these functions write the output under  the  control  of  a
+        format  string  that  specifies how subsequent arguments (or argu‐
+        ments accessed via  the  variable-length  argument  facilities  of
+        stdarg(3)) are converted for output.
+        
+        返回值
+        The functions snprintf() and vsnprintf() do not  write  more  than
+        size  bytes  (including the terminating null byte ('\0')).  If the
+        output was truncated due to this limit, then the return  value  is
+        the  number  of  characters  (excluding the terminating null byte)
+        which would have been written to the final string if enough  space
+        had  been  available.   Thus, a return value of size or more means
+        that the output was truncated.  (See also below under NOTES.)
+
+       If an output error is encountered, a negative value is returned.
+     */
     if( len >= ( WRITE_BUFFER_SIZE - 1 - m_write_idx ) ) {
         return false;
     }
