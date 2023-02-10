@@ -30,7 +30,7 @@ void addsig(int sig, void(handler)(int)) {
 // add/remove fd to/from epoll
 extern void addfd(int epoll_fd, int fd, bool one_shot);
 extern void removefd(int epoll_fd, int fd);
-extern void modifyfd(int epoll_fd, int fd, int event);
+// extern void modifyfd(int epoll_fd, int fd, int event);
 
 int main(int argc, char* argv[]) {
 
@@ -52,7 +52,8 @@ int main(int argc, char* argv[]) {
     try {
         pool = new thread_pool<http_connection>;
     } catch(...) {
-        exit(-1);
+        // exit(-1);
+        return 1;
     }
 
     // clients' requests information
@@ -67,20 +68,11 @@ int main(int argc, char* argv[]) {
         open for the process
     */
 
-    // 设置端口复用 
-    int reuse = 1;
-    setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
-    /*  
-        int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);
-        When  manipulating  socket options, the level at which the option resides and the name of
-        the option must be specified.  To manipulate options at the sockets API level,  level  is
-        specified as SOL_SOCKET
-        The arguments optval and optlen are used to access option values for  setsockopt() 
-    */
+    int ret = 0;
     // bind
     struct sockaddr_in address; 
+    address.sin_addr.s_addr = INADDR_ANY; // 0x00000000, 4 bytes
     address.sin_family = AF_INET; // 2 bytes
-    address.sin_addr.s_addr = INADDR_ANY; // 4 bytes
     address.sin_port = htons(port); // 2 bytes
     // padding
 
@@ -98,7 +90,16 @@ int main(int argc, char* argv[]) {
                     sizeof (struct in_addr)];
         };
     */
-    int ret = 0;
+    // 设置端口复用 
+    int reuse = 1;
+    setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+    /*  
+        int setsockopt(int sockfd, int level, int optname, const void *optval, socklen_t optlen);
+        When  manipulating  socket options, the level at which the option resides and the name of
+        the option must be specified.  To manipulate options at the sockets API level,  level  is
+        specified as SOL_SOCKET
+        The arguments optval and optlen are used to access option values for  setsockopt() 
+    */
     ret = bind(listen_fd, (struct sockaddr*)&address, sizeof(address));
     /* 
         

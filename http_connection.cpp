@@ -84,7 +84,7 @@ void http_connection::init(int sockfd, const sockaddr_in& addr) {
     // 将新连接读事件注册到epoll instance
     addfd(m_epoll_fd, sockfd, true);
     m_user_count++;
-    // init();
+    init();
 }
 
 void http_connection::init() {
@@ -169,7 +169,7 @@ bool http_connection::read() {
         }
         m_read_index += bytes_read;
     }
-    printf("data read: %s", m_read_buf);
+    printf("\ndata read:\n\n%s", m_read_buf);
     return true;
 }
 
@@ -270,7 +270,7 @@ http_connection::HTTP_CODE http_connection::parse_headers(char* text) {
         text += strspn( text, " \t" );
         m_host = text;
     } else {
-        printf( "oop! unknow header %s\n", text );
+        // printf( "oop! unknow header %s\n", text );
     }
     return NO_REQUEST;
 }
@@ -295,7 +295,7 @@ http_connection::HTTP_CODE http_connection::process_read() {
         // 获取一行数据
         text = get_line();
         m_start_line = m_checked_idx;
-        printf( "got 1 http line: %s\n", text );
+        // printf( "got 1 http line: %s\n", text );
 
         switch ( m_check_state ) {
             case CHECK_STATE_REQUESTLINE: {
