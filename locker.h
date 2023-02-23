@@ -90,8 +90,8 @@ public:
     bool wait() {
         return sem_wait(&m_sem) == 0; 
         /* 
-            sem > 0  --> sem--, 立即返回
-            sem == 0, 阻塞, 直到sem > 0 或收到信号
+            sem > 0  --> --sem, 立即返回 P
+            sem == 0, 阻塞, 直到sem > 0(再执行 --sem) 或收到信号
             sem_wait() decrements (locks) the semaphore  pointed  to  by
             sem.   If  the  semaphore's value is greater than zero, then
             the decrement proceeds, and the  function  returns,  immedi‐
@@ -104,7 +104,7 @@ public:
     bool post() {
         return sem_post(&m_sem) == 0;
         /* 
-            sem++, 如果++后sem > 0, 某个被sem阻塞的进程/线程将被唤醒
+            ++sem, 如果++后sem > 0, 某个被sem阻塞的进程/线程将被唤醒  V
             sem_post()  increments (unlocks) the semaphore pointed to by
             sem.  If the semaphore's value consequently becomes  greater
             than  zero,  then  another  process  or  thread blocked in a
