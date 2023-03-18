@@ -7,6 +7,75 @@
 #include <cstdio>
 #include "locker.h"
 
+#include <atomic>
+#include <memory>
+
+template <typename T>
+class LockFreeQueue {
+public:
+    LockFreeQueue() {
+        head.store(new Node());
+        tail.store(head.load());
+        size_.store(0);
+    }
+
+    ~LockFreeQueue() {
+        while (head.load()) {
+            Node* tmp = head.load();
+            head.store(tmp->next.load());
+            delete tmp;
+        }
+    }
+
+    void push(T value) {
+        Node* newNode = new Node(value);
+        Node* oldTail;
+        do {
+            oldTail = tail.load();
+        } while (!tail.compare_exchange_weak(oldTail, newNode));
+        oldTail->next.store(newNode);
+        size_.fetch_add(1); // 增加队列大小
+    }
+
+    T pop() {
+        Node* oldHead;
+        Node* newHead;
+        T value;
+        do {
+            oldHead = head.load();
+            newHead = oldHead->next.load();
+            if (!newHead) {
+                return nullptr;
+            }
+            value = newHead->value;
+        } while (!head.compare_exchange_weak(oldHead, newHead));
+        delete oldHead;
+        size_.fetch_sub(1); // 减小队列大小
+        return value;
+    }
+
+    bool empty() {
+        return head.load()->next.load() == nullptr;
+    }
+
+    size_t size() const {
+        return size_.load();
+    }
+
+private:
+    struct Node {
+        Node(T v = nullptr) : value(v), next(nullptr) {}
+        T value;
+        std::atomic<Node*> next;
+    };
+
+    std::atomic<Node*> head;
+    std::atomic<Node*> tail;
+    std::atomic<size_t> size_; // 队列大小
+};
+
+
+
 template<typename T>
 class thread_pool {
 public:
@@ -22,7 +91,8 @@ private:
 
     // request queue, linked list
     int m_max_requests;
-    std::list<T*> m_work_queue;
+    // std::list<T*> m_work_queue;
+    LockFreeQueue<T*> m_work_queue;
 
     locker m_queue_locker;
 
@@ -132,42 +202,67 @@ thread_pool<T>::~thread_pool() {
 }
 
 template<typename T>
-bool thread_pool<T>::append(T* request) {
-    m_queue_locker.lock();
-    if (m_work_queue.size() > m_max_requests) {
-        m_queue_locker.unlock();
-        return false;
-    }
-    m_work_queue.push_back(request); // std::list<http_connection*> m_work_queue;
-    m_queue_locker.unlock();
-    m_queue_stat.post();
-    return true; 
-}
-
-template<typename T>
 void* thread_pool<T>::worker(void* arg) {
     thread_pool* pool = (thread_pool*)arg;
     pool->run();
     return pool;
+}
+template<typename T>
+bool thread_pool<T>::append(T* request) {
+    if (m_work_queue.size() >= m_max_requests) {
+        return false;
+    }
+    m_work_queue.push(request); // 使用无锁队列
+    m_queue_stat.post();
+    return true; 
 }
 
 template<typename T>
 void thread_pool<T>::run() {
     while (!m_stop) {
         m_queue_stat.wait(); // sem m_queue_stat;
-        m_queue_locker.lock(); // pthread_mutex_t 
-        if (m_work_queue.empty()) { // std::list<T*> m_work_queue;
-            m_queue_locker.unlock();
+        if (m_work_queue.empty()) {
             continue;
         }
-        T* request = m_work_queue.front();
-        m_work_queue.pop_front();
-        m_queue_locker.unlock();
+        T* request = m_work_queue.pop(); // 从无锁队列中取出任务
         if (!request)
             continue;
         request->process();
     }
 }
+
+// template<typename T>
+// bool thread_pool<T>::append(T* request) {
+//     m_queue_locker.lock();
+//     if (m_work_queue.size() > m_max_requests) {
+//         m_queue_locker.unlock();
+//         return false;
+//     }
+//     m_work_queue.push_back(request); // std::list<http_connection*> m_work_queue;
+//     m_queue_locker.unlock();
+//     m_queue_stat.post();
+//     return true; 
+// }
+
+// template<typename T>
+// void thread_pool<T>::run() {
+//     while (!m_stop) {
+//         m_queue_stat.wait(); // sem m_queue_stat;
+//         m_queue_locker.lock(); // pthread_mutex_t 
+//         if (m_work_queue.empty()) { // std::list<T*> m_work_queue;
+//             m_queue_locker.unlock();
+//             continue;
+//         }
+//         T* request = m_work_queue.front();
+//         // T* request = m_work_queue.pop();
+//         m_work_queue.pop_front();
+//         m_queue_locker.unlock();
+//         if (!request)
+//             continue;
+//         request->process();
+//     }
+// }
+
 #endif
 
 
